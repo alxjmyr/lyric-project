@@ -99,21 +99,76 @@ if __name__ == "__main__":
     dat = input_data()
     print(dat)
 
-    # # shitty plot of nodes (need to figureout how to add routes)
-    # import matplotlib.pyplot as plt
-    # from plot_utils import node_attrs
+    # plot of nodes / deliveries
+    import matplotlib.pyplot as plt
+    from plot_utils import make_plot_data
 
-    # nodes =
+    plot_data = make_plot_data(dat["nodes"])
 
-    # x, y = zip(*nodes)
+    fig, ax = plt.subplots()
 
-    # plt.scatter(x, y, color="green", marker="o")
+    for node in plot_data:
+        if node[2]["name"] == "depot":
+            continue
+        else:
+            ax.scatter(
+                node[0],
+                node[1],
+                color=node[2]["color"],
+                marker=node[2]["marker"],
+                label=node[2]["name"],
+            )
 
-    # for i, (x, y) in enumerate(nodes):
-    #     plt.text(x, y, f"{i} || {x},{y}", fontsize=9, ha="left")
+    ax.set_xlabel("X-axis")
+    ax.set_ylabel("Y-axis")
+    ax.set_title("Pick up / Delivery Map")
+    ax.grid(True)
 
-    # plt.xlabel("x")
-    # plt.ylabel("y")
-    # plt.title("Where are the nodes")
-
+    plt.legend(loc="best")
     # plt.show()
+    plt.savefig("./out/nodes_plot.pdf")
+
+    # Unpack routes and enrich with coordinates
+    routes = []
+    for route in output["route_output"]["routes"]:
+        stop_list = []
+        if route["stops"] == []:
+            continue
+        else:
+            for stop in route["stops"]:
+
+                stop_detail = {
+                    "x": plot_data[stop["node"]][0],
+                    "y": plot_data[stop["node"]][1],
+                    "color": plot_data[stop["node"]][2]["color"],
+                    "marker": plot_data[stop["node"]][2]["marker"],
+                    "name": plot_data[stop["node"]][2]["name"],
+                }
+                stop_list.append(stop_detail)
+        routes.append(stop_list)
+
+    fig, ax = plt.subplots()
+
+    for route in routes:
+        prev_stop = None
+        for stop in route:
+            ax.scatter(stop["x"], stop["y"], color=stop["color"], marker=stop["marker"])
+            if prev_stop:
+                ax.annotate(
+                    "",
+                    xy=(stop["x"], stop["y"]),
+                    xytext=(prev_stop["x"], prev_stop["y"]),
+                    arrowprops=dict(arrowstyle="->", lw=1.5),
+                )
+            prev_stop = stop
+
+    # Adding plot labels and grid
+    ax.set_xlabel("X-axis")
+    ax.set_ylabel("Y-axis")
+    ax.set_title("Scatter Plot with Individual Points and Arrows")
+    ax.grid(True)
+
+    # Display the plot
+    plt.legend()
+    # plt.show()
+    plt.savefig("./out/routes_plot.pdf")

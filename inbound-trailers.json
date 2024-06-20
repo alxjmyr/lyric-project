@@ -1,0 +1,104 @@
+{
+    "trailers": [
+        {
+            "id": 1,
+            "ttl_ctns": 100,
+            "n_auto": 70,
+            "n_ncon": 30,
+            "is_live": false
+        },
+        {
+            "id": 2,
+            "ttl_ctns": 275,
+            "n_auto": 255,
+            "n_ncon": 20,
+            "is_live": false
+        },
+        {
+            "id": 3,
+            "ttl_ctns": 200,
+            "n_auto": 200,
+            "n_ncon": 0,
+            "is_live": false
+        },
+        {
+            "id": 4,
+            "ttl_ctns": 90,
+            "n_auto": 0,
+            "n_ncon": 90,
+            "is_live": false
+        },
+        {
+            "id": 5,
+            "ttl_ctns": 215,
+            "n_auto": 15,
+            "n_ncon": 200,
+            "is_live": false
+        },
+        {
+            "id": 6,
+            "ttl_ctns": 100,
+            "n_auto": 88,
+            "n_ncon": 12,
+            "is_live": false
+        },
+        {
+            "id": 7,
+            "ttl_ctns": 115,
+            "n_auto": 115,
+            "n_ncon": 0,
+            "is_live": false
+        },
+        {
+            "id": 8,
+            "ttl_ctns": 309,
+            "n_auto": 209,
+            "n_ncon": 100,
+            "is_live": false
+        },
+        {
+            "id": 9,
+            "ttl_ctns": 50,
+            "n_auto": 50,
+            "n_ncon": 0,
+            "is_live": false
+        },
+        {
+            "id": 10,
+            "ttl_ctns": 140,
+            "n_auto": 70,
+            "n_ncon": 70,
+            "is_live": false
+        },
+        {
+            "id": 11,
+            "ttl_ctns": 50,
+            "n_auto": 50,
+            "n_ncon": 0,
+            "is_live": false
+        },
+        {
+            "id": 12,
+            "ttl_ctns": 35,
+            "n_auto": 0,
+            "n_ncon": 35,
+            "is_live": false
+        },
+        {
+            "id": 13,
+            "ttl_ctns": 245,
+            "n_auto": 245,
+            "n_ncon": 0,
+            "is_live": false
+        },
+        {
+            "id": 14,
+            "ttl_ctns": 75,
+            "n_auto": 75,
+            "n_ncon": 0,
+            "is_live": true,
+            "live_start": 10,
+            "live_end": 20
+        }
+    ]
+}

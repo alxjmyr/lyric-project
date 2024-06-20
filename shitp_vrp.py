@@ -6,7 +6,7 @@ Basic CVRP implementation representing routing strategy used at Shipt
 from ortools.constraint_solver import pywrapcp
 from ortools.constraint_solver import routing_enums_pb2
 
-from utils import input_data, estimate_counterfactual_cost, parse_solution
+from vrp_utils import input_data, estimate_counterfactual_cost, parse_solution
 
 
 def run_problem():
@@ -15,42 +15,42 @@ def run_problem():
     """
     # Instantiate the data problem.
     data = input_data()
-    # print(data["distance_matrix"])
-    # print(data["pickups_deliveries"])
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(
         len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
     )
 
-    # Create Routing Model.
     routing = pywrapcp.RoutingModel(manager)
 
-    # Define cost of each arc.
-    def distance_callback(from_index, to_index):
-        """Returns the manhattan distance between the two nodes."""
+    # Define cost (as time in minutes) of each arc.
+    def drive_time_callback(from_index, to_index):
+        """
+        Returns the euclidian distance between two nodes. from routing matrix
+        """
         # Convert from routing variable Index to distance matrix NodeIndex.
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
         return data["distance_matrix"][from_node][to_node]
 
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    transit_callback_index = routing.RegisterTransitCallback(drive_time_callback)
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
-    # Add Distance constraint.
+    # Add route length (drive time in minutes) constraint.
+    # print(f'max route length {data['max_route_mins']}')
     routing.AddDimension(
         transit_callback_index,
         0,  # no slack
-        110,  # vehicle maximum travel distance
-        True,  # start cumul to zero
+        data["max_route_mins"],  # vehicle maximum drive time
+        True,  # start cumul time at zero
         "Route_Drive_Time",
     )
     time_dimension = routing.GetDimensionOrDie("Route_Drive_Time")
     time_dimension.SetGlobalSpanCostCoefficient(100)
 
-    # Add Capacity Constraint
+    # Add package Capacity Constraint
     def demand_callback(from_index):
-        """returns demand of a given node"""
+        """returns demand (package count capacity impact) of a given node"""
         from_node = manager.IndexToNode(from_index)
 
         return data["demands"][from_node]
@@ -60,7 +60,7 @@ def run_problem():
         demand_callback_index,
         0,  # no slack
         data["vehicle_capacities"],  # max capacities array
-        True,  # start cumul to zero
+        True,  # start cumul for capacity to zero
         "Capacity",
     )
 
@@ -80,14 +80,15 @@ def run_problem():
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+        routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC
     )
 
-    # Solve the problem.
+    # sovle it....
     solution = routing.SolveWithParameters(search_parameters)
 
-    # Print solution on console.
+    # parse solution & return w/ eval data compared to counterfactual
     if solution:
+        print("Solution Found")
         output = parse_solution(data, manager, routing, solution)
         performance_eval = estimate_counterfactual_cost(data, output)
         return {"route_output": output, "eval": performance_eval}
@@ -95,40 +96,39 @@ def run_problem():
 
 if __name__ == "__main__":
     output = run_problem()
-    print(output)
     dat = input_data()
-    print(dat)
 
-    # plot of nodes / deliveries
+    for k, v in output["eval"].items():
+        print(f"{k}: {v}")
+
+    # plots of nodes / deliveries
     import matplotlib.pyplot as plt
-    from plot_utils import make_plot_data
-
-    plot_data = make_plot_data(dat["nodes"])
+    from numpy.random import randint
 
     fig, ax = plt.subplots()
 
-    for node in plot_data:
-        if node[2]["name"] == "depot":
+    for node in dat["nodes"]:
+        if node["attributes"]["name"] == "Dummy Depot":
             continue
         else:
             ax.scatter(
-                node[0],
-                node[1],
-                color=node[2]["color"],
-                marker=node[2]["marker"],
-                label=node[2]["name"],
+                node["coords"][0],
+                node["coords"][1],
+                color=node["attributes"]["color"],
+                marker=node["attributes"]["marker"],
+                label=node["attributes"]["name"],
             )
 
     ax.set_xlabel("X-axis")
     ax.set_ylabel("Y-axis")
-    ax.set_title("Pick up / Delivery Map")
+    ax.set_title("Market Pick up / Delivery Map")
     ax.grid(True)
 
-    plt.legend(loc="best")
+    # plt.legend(loc="best")
     # plt.show()
     plt.savefig("./out/nodes_plot.pdf")
 
-    # Unpack routes and enrich with coordinates
+    # Unpack routes and enrich with coordinates / node attributes
     routes = []
     for route in output["route_output"]["routes"]:
         stop_list = []
@@ -136,36 +136,54 @@ if __name__ == "__main__":
             continue
         else:
             for stop in route["stops"]:
-
                 stop_detail = {
-                    "x": plot_data[stop["node"]][0],
-                    "y": plot_data[stop["node"]][1],
-                    "color": plot_data[stop["node"]][2]["color"],
-                    "marker": plot_data[stop["node"]][2]["marker"],
-                    "name": plot_data[stop["node"]][2]["name"],
+                    "x": dat["nodes"][stop["node"]]["coords"][0],
+                    "y": dat["nodes"][stop["node"]]["coords"][1],
+                    "color": dat["nodes"][stop["node"]]["attributes"]["color"],
+                    "marker": dat["nodes"][stop["node"]]["attributes"]["marker"],
+                    "name": dat["nodes"][stop["node"]]["attributes"]["name"],
+                    "node_idx": stop["node"],
+                    "node_activity": stop["load_activity"],
                 }
                 stop_list.append(stop_detail)
-        routes.append(stop_list)
+        routes.append(
+            {
+                "vehicle": route["vehicle"],
+                "route_mins": route["route_mins"],
+                "stops": stop_list,
+            }
+        )
 
     fig, ax = plt.subplots()
 
     for route in routes:
         prev_stop = None
-        for stop in route:
+        route_color = (
+            randint(10, 100) / 100,
+            randint(10, 100) / 100,
+            randint(10, 100) / 100,
+        )
+        for stop in route["stops"]:
+
             ax.scatter(stop["x"], stop["y"], color=stop["color"], marker=stop["marker"])
+
             if prev_stop:
                 ax.annotate(
                     "",
                     xy=(stop["x"], stop["y"]),
                     xytext=(prev_stop["x"], prev_stop["y"]),
-                    arrowprops=dict(arrowstyle="->", lw=1.5),
+                    arrowprops=dict(
+                        arrowstyle="->",
+                        lw=2,
+                        color=route_color,
+                    ),
                 )
             prev_stop = stop
 
     # Adding plot labels and grid
     ax.set_xlabel("X-axis")
     ax.set_ylabel("Y-axis")
-    ax.set_title("Scatter Plot with Individual Points and Arrows")
+    ax.set_title("Market Map w/ Routing Decisions")
     ax.grid(True)
 
     # Display the plot

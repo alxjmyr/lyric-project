@@ -4,9 +4,9 @@ from uuid import uuid1
 
 
 origins_default = [
-    {"id": "Store 1", "delivery_count": 3, "color": "red"},
+    {"id": "Store 1", "delivery_count": 10, "color": "red"},
     {"id": "Store 2", "delivery_count": 4, "color": "green"},
-    {"id": "Store 3", "delivery_count": 3, "color": "blue"},
+    {"id": "Store 3", "delivery_count": 7, "color": "blue"},
 ]
 
 
@@ -16,7 +16,7 @@ def input_data(
     max_route_length=120,
     origin_locs=origins_default,
     grid_min=0,
-    grid_max=100,
+    grid_max=35,
 ):
     """
     Purpose:
@@ -26,7 +26,7 @@ def input_data(
     origin_locs = dict w/ info about origin attributes and requested delivery counts
     grid_min & grid_max set size of x,y grid for the problem space
     """
-    seed(123)  # set seed to ensure location consistency across runs
+    seed(3456)  # set seed to ensure location consistency across runs
     nodes = [
         {
             "coords": randint(low=grid_min, high=grid_max, size=2),

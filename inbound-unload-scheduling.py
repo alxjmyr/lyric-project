@@ -55,7 +55,7 @@ num_unloads = len(trailer_data["trailers"])
 
 
 # rules
-# trailers > 15% non-con can't go in auto
+# trailers > 15% non-con can't go in an autodoor
 # anything could potentially go through non-con or manual doors
 
 # each unload consists of 1 task (unload)
@@ -67,6 +67,7 @@ for trailer in trailer_data["trailers"]:
 
     if unload_estimates["auto"] == -1:  # trailer can't go on auto dock
         task = [
+            # Static Assumption for yard move into / out of door (IRL would use a model here to make predictions)
             [(2, 4)],
             [(unload_estimates["manual"], 2), (unload_estimates["ncon"], 3)],
             [(2, 4)],
@@ -95,16 +96,16 @@ for trailer in trailer_data["trailers"]:
     else:
         unloads.append({"tasks": task, "live_start": -1, "live_end": -1})
 
-# for unload in unloads:
-#     print(unload)
 
 num_jobs = len(unloads)
 all_jobs = range(num_jobs)
 
-num_machines = 5
+num_machines = 5  # "machine count" is set
 all_machines = range(num_machines)
 
 # flexible job shop implementation using or-tools CP solver
+# implementation generally based on cp-sat job shop implementation here
+# https://github.com/google/or-tools/tree/stable/examples/python
 model = cp_model.CpModel()
 
 # need to calculate max horizon for completion
@@ -127,7 +128,8 @@ starts = {}  # indexed by (job_id, task_id).
 presences = {}  # indexed by (job_id, task_id, alt_id).
 job_ends = []
 
-# Scan the jobs and create the relevant variables and intervals.
+# Scan the trailer unload jobs and create the
+# relevant variables and intervals to control start end / durations of tasks & their alernatives
 for job_id in all_jobs:
     job = jobs[job_id]
     num_tasks = len(job["tasks"])
@@ -148,6 +150,9 @@ for job_id in all_jobs:
 
         # Create main interval for the task.
         suffix_name = "_j%i_t%i" % (job_id, task_id)
+        # If an unload has a live unload requirement
+        # set start time interval based on the live unload schedule time
+        # guarantees that the unload will be scheduled to start in the specified interval
         if job["live_start"] > -1:
             start = model.NewIntVar(
                 job["live_start"], job["live_end"], "start" + suffix_name
@@ -172,7 +177,9 @@ for job_id in all_jobs:
             for alt_id in all_alternatives:
                 alt_suffix = "_j%i_t%i_a%i" % (job_id, task_id, alt_id)
                 l_presence = model.NewBoolVar("presence" + alt_suffix)
-                # l_start = model.NewIntVar(0, horizon, "start" + alt_suffix)
+                # If an unload has a live unload requirement
+                # set start time interval based on the live unload schedule time
+                # guarantees that the unload will be scheduled to start in the specified interval
                 if job["live_start"] > -1:
                     l_start = model.NewIntVar(
                         job["live_start"], job["live_end"], "start" + suffix_name
@@ -240,7 +247,7 @@ status = solver.Solve(model, solution_printer)
 
 # Print final solution.
 for job_id in all_jobs:
-    print("Job %i:" % job_id)
+    print(f"Job {job_id}:")
     for task_id in range(len(jobs[job_id]["tasks"])):
         start_value = solver.Value(starts[(job_id, task_id)])
         machine = -1
@@ -251,14 +258,11 @@ for job_id in all_jobs:
                 duration = jobs[job_id]["tasks"][task_id][alt_id][0]
                 machine = jobs[job_id]["tasks"][task_id][alt_id][1]
                 selected = alt_id
+        end_value = start_value + duration
         print(
-            "  task_%i_%i starts at %i (alt %i, machine %i, duration %i)"
-            % (job_id, task_id, start_value, selected, machine, duration)
+            f"  Trailer_Task_{job_id}_{task_id} starts at {start_value} ends at {end_value} (alt {selected}, machine {machine}, duration {duration})"
         )
 
-print("Solve status: %s" % solver.StatusName(status))
-print("Optimal objective value: %i" % solver.ObjectiveValue())
-print("Statistics")
-print("  - conflicts : %i" % solver.NumConflicts())
-print("  - branches  : %i" % solver.NumBranches())
-print("  - wall time : %f s" % solver.WallTime())
+print(f"Solver status: {solver.StatusName(status)}")
+print(f"Total Unload Time for {len(unloads)} trailers: {solver.ObjectiveValue()}")
+# print("Solution wall time : %f s" % solver.WallTime())

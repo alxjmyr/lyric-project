@@ -26,7 +26,8 @@ def run_problem():
     # Define cost (as time in minutes) of each arc.
     def drive_time_callback(from_index, to_index):
         """
-        Returns the euclidian distance between two nodes. from routing matrix
+        Returns the euclidian distance between two nodes from routing matrix
+        Pretend this is a fulfillment time estimate based on ML model
         """
         # Convert from routing variable Index to distance matrix NodeIndex.
         from_node = manager.IndexToNode(from_index)
@@ -46,14 +47,23 @@ def run_problem():
         "Route_Drive_Time",
     )
     time_dimension = routing.GetDimensionOrDie("Route_Drive_Time")
-    time_dimension.SetGlobalSpanCostCoefficient(100)
+
 
     # Add package Capacity Constraint
     def demand_callback(from_index):
-        """returns demand (package count capacity impact) of a given node"""
+        """
+        returns demand (package count capacity impact) of a given node
+
+        In this case we want to constrain the total number of deliveries in a route
+        We'll return a 0 in the case of delivery nodes which have a negative value in the demands array
+        
+        """
         from_node = manager.IndexToNode(from_index)
 
-        return data["demands"][from_node]
+        if data['demands'][from_node] < 0:
+            return 0
+        else:
+            return data['demands'][from_node]
 
     demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
     routing.AddDimensionWithVehicleCapacity(
@@ -80,7 +90,8 @@ def run_problem():
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC
+        routing_enums_pb2.FirstSolutionStrategy.GLOBAL_CHEAPEST_ARC
+        # routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC
     )
 
     # sovle it....
@@ -92,14 +103,47 @@ def run_problem():
         output = parse_solution(data, manager, routing, solution)
         performance_eval = estimate_counterfactual_cost(data, output)
         return {"route_output": output, "eval": performance_eval}
+    else:
+        print("soltion not found / problem infeasible")
 
 
 if __name__ == "__main__":
     output = run_problem()
     dat = input_data()
 
+    routes = []
+    for route in output["route_output"]["routes"]:
+        stop_list = []
+        if route["stops"] == []:
+            continue
+        else:
+            for stop in route["stops"]:
+                stop_detail = {
+                    "x": dat["nodes"][stop["node"]]["coords"][0],
+                    "y": dat["nodes"][stop["node"]]["coords"][1],
+                    "color": dat["nodes"][stop["node"]]["attributes"]["color"],
+                    "marker": dat["nodes"][stop["node"]]["attributes"]["marker"],
+                    "name": dat["nodes"][stop["node"]]["attributes"]["name"],
+                    "node_idx": stop["node"],
+                    "node_activity": stop["load_activity"],
+                }
+                stop_list.append(stop_detail)
+        routes.append(
+            {
+                "vehicle": route["vehicle"],
+                "route_mins": route["route_mins"],
+                "stops": stop_list,
+            }
+        )
+
     for k, v in output["eval"].items():
         print(f"{k}: {v}")
+
+    for route in routes:
+        print(f'Route: {route['vehicle']}')
+        print(f'Route Length: {route['route_mins']}')
+        print('\n')
+        
 
     # plots of nodes / deliveries
     import matplotlib.pyplot as plt
@@ -129,30 +173,6 @@ if __name__ == "__main__":
     plt.savefig("./out/nodes_plot.pdf")
 
     # Unpack routes and enrich with coordinates / node attributes
-    routes = []
-    for route in output["route_output"]["routes"]:
-        stop_list = []
-        if route["stops"] == []:
-            continue
-        else:
-            for stop in route["stops"]:
-                stop_detail = {
-                    "x": dat["nodes"][stop["node"]]["coords"][0],
-                    "y": dat["nodes"][stop["node"]]["coords"][1],
-                    "color": dat["nodes"][stop["node"]]["attributes"]["color"],
-                    "marker": dat["nodes"][stop["node"]]["attributes"]["marker"],
-                    "name": dat["nodes"][stop["node"]]["attributes"]["name"],
-                    "node_idx": stop["node"],
-                    "node_activity": stop["load_activity"],
-                }
-                stop_list.append(stop_detail)
-        routes.append(
-            {
-                "vehicle": route["vehicle"],
-                "route_mins": route["route_mins"],
-                "stops": stop_list,
-            }
-        )
 
     fig, ax = plt.subplots()
 
@@ -187,6 +207,6 @@ if __name__ == "__main__":
     ax.grid(True)
 
     # Display the plot
-    plt.legend()
+    # plt.legend()
     # plt.show()
     plt.savefig("./out/routes_plot.pdf")
